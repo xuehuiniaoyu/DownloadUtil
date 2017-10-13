@@ -24,7 +24,7 @@ public class MainActivity extends Activity {
     private Button btn;
 
 
-    final String url = "http://apk.znds.com/";
+    final String url = "https://github.com/xuehuiniaoyu/DownloadUtil/raw/master/app_1506583562917.apk";
 
     private Handler mHandler = new Handler() {
         @Override
@@ -67,13 +67,12 @@ public class MainActivity extends Activity {
                         break;
                     }
                     case Status.STATE_ERROR: {
-                        btn.setText("重新下载");
                         downloadManager.removeAllFiles(downloadInfo);
                         downloadManager.start(downloadInfo);
                         break;
                     }
                     case Status.STATE_SUCCESS: {
-                        btn.setText("安装");
+                        PackageUtil.installBySystem(MainActivity.this, downloadInfo.getLocalFile().getAbsolutePath());
                         break;
                     }
                     case Status.STATE_DOWNLOAD: {
