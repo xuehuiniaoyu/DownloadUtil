@@ -1,18 +1,18 @@
 package file.downloadutil;
 
 import android.os.SystemClock;
-import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Observable;
 import java.util.Vector;
 
 /**
  * Created by Administrator on 2017/10/10 0010.
  */
 
-public class DownloadTask extends Observable {
+class DownloadTask extends LoudspeakerObserable {
+
+    private DownloadManager downloadManager;
 
     /** 分片集合：一个下载被拆分为n部分去下载，这样做的好处是经可能的使用带宽，这些分片都被记录在 downloadSplits 集合中。 **/
     private List<DownloadSplit> downloadSplits = new Vector<>();
@@ -28,11 +28,15 @@ public class DownloadTask extends Observable {
     /** 通知状态间隔时间 **/
     private long notifyIntervalTime = 1000;
 
+    class AliveInfo {
+        boolean alive;
+    } AliveInfo aliveInfo = new AliveInfo();
+
     /**
      * 设置状态通知间隔时间
      * @param notifyIntervalTime
      */
-    public void setNotifyIntervalTime(long notifyIntervalTime) {
+    void setNotifyIntervalTime(long notifyIntervalTime) {
         this.notifyIntervalTime = notifyIntervalTime;
     }
 
@@ -42,7 +46,7 @@ public class DownloadTask extends Observable {
         private DownloadInfo downloadInfo;
         private ArrayList<DownloadSplit> downloadSplits;
 
-        public ProgressMonitorThread(DownloadInfo downloadInfo) {
+        ProgressMonitorThread(DownloadInfo downloadInfo) {
             this.downloadInfo = downloadInfo;
             alive = true;
             downloadSplits = new ArrayList<>(DownloadTask.this.downloadSplits);
@@ -50,13 +54,14 @@ public class DownloadTask extends Observable {
         @Override
         public void run() {
             while (alive && working) {
-//                LogInfo.d(this + ", "+alive + ", "+working+" , "+downloadInfo);
                 long progress = 0;
                 for (DownloadSplit split : downloadSplits) {
                     progress += split.getCursor();
                 }
-                downloadInfo.setProgress(progress);
-                send(downloadInfo);
+                if(progress > 0) {
+                    downloadInfo.setProgress(progress);
+                }
+                send(downloadInfo, downloadManager);
                 if(notifyIntervalTime > 0) {
                     SystemClock.sleep(notifyIntervalTime);
                 }
@@ -64,30 +69,33 @@ public class DownloadTask extends Observable {
             downloadSplits.clear();
             downloadSplits = null;
             downloadInfo = null;
-            LogInfo.d("结束" + working + ", "+alive);
+            LogInfo.d("通知器结束工作" + working + ", "+alive);
         }
     }
 
-    /**
-     * 扬声器开关，如果打开就可以通知消息，关闭则收不到任何通知。
-     */
-    public boolean loudspeakerIsOpen = true;
-
-    public DownloadInfo getDownloadInfo() {
+    DownloadInfo getDownloadInfo() {
         return downloadInfo;
     }
 
     void setDownloadInfo(DownloadInfo downloadInfo) {
         loudspeakerIsOpen = true;
-        send(this.downloadInfo = downloadInfo);
+        send(this.downloadInfo = downloadInfo, downloadManager);
+    }
+
+    public DownloadManager getDownloadManager() {
+        return downloadManager;
+    }
+
+    public void setDownloadManager(DownloadManager downloadManager) {
+        this.downloadManager = downloadManager;
     }
 
     private void reset() {
         LogInfo.d("reset");
         progressMonitor.alive = false;
         progressMonitor = null;
-        send(downloadInfo);
-        downloadInfo = null;
+        send(downloadInfo, downloadManager);
+        downloadManager = null;
         onResetListener.onReset(this);
     }
 
@@ -121,6 +129,7 @@ public class DownloadTask extends Observable {
         if(downloadInfo.getState() == Status.STATE_DOWNLOAD) {
             if(!downloadSplit.isSuccess()) {
                 downloadInfo.setState(Status.STATE_ERROR);
+                aliveInfo.alive = false;
             }
         }
         if(downloadSplits.size() == 0) {
@@ -128,34 +137,23 @@ public class DownloadTask extends Observable {
                 downloadInfo.setState(Status.STATE_SUCCESS);
                 downloadInfo.setProgress(downloadInfo.getTotal());
             }
+            else if(downloadInfo.getState() == Status.PAUSE) {
+                downloadInfo.setState(Status.STATE_PAUSE);
+            }
+            else if(downloadInfo.getState() == Status.CANCEL) {
+                downloadInfo.setState(Status.STATE_CANCEL);
+                downloadInfo.setProgress(0);
+            }
             reset();
         }
     }
 
-    /**
-     * 通知状态
-     * @param entity
-     */
-    void send(ObserverEntity entity) {
-        if(loudspeakerIsOpen) {
-            setChanged();
-            notifyObservers(entity);
-        }
-    }
-
-    public void send(DownloadInfo downloadInfo) {
-        ObserverEntity observerEntity  = new ObserverEntity();
-        observerEntity.downloadInfo = downloadInfo;
-        observerEntity.downloadTask = this;
-        send(observerEntity);
-    }
-
-    public boolean isWorking() {
+    boolean isWorking() {
         return working;
     }
 
     void setWorking(boolean working) {
-        this.working = working;
+        aliveInfo.alive = (this.working = working);
     }
 
     /**

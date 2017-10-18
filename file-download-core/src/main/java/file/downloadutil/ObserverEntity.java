@@ -6,5 +6,5 @@ package file.downloadutil;
 
 class ObserverEntity {
     DownloadInfo downloadInfo;
-    DownloadTask downloadTask;
+    DownloadManager manager;
 }

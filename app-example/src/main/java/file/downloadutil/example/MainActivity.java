@@ -8,12 +8,13 @@ import android.os.Message;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.ProgressBar;
 
 import java.io.File;
+import java.util.Collection;
 
 import file.downloadutil.DownloadInfo;
 import file.downloadutil.DownloadManager;
-import file.downloadutil.DownloadTask;
 import file.downloadutil.Status;
 
 public class MainActivity extends Activity {
@@ -22,6 +23,7 @@ public class MainActivity extends Activity {
     DownloadInfo downloadInfo;
 
     private Button btn;
+    private ProgressBar seek;
 
 
     final String url = "https://github.com/xuehuiniaoyu/DownloadUtil/raw/master/app_1506583562917.apk";
@@ -40,6 +42,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        seek = (ProgressBar) findViewById(R.id.seek);
         btn = (Button) findViewById(R.id.btn);
         findViewById(R.id.cancel).setOnClickListener(new View.OnClickListener() {
             @Override
@@ -67,12 +70,12 @@ public class MainActivity extends Activity {
                         break;
                     }
                     case Status.STATE_ERROR: {
-                        downloadManager.removeAllFiles(downloadInfo);
                         downloadManager.start(downloadInfo);
                         break;
                     }
                     case Status.STATE_SUCCESS: {
-                        PackageUtil.installBySystem(MainActivity.this, downloadInfo.getLocalFile().getAbsolutePath());
+                        PackageUtil.chmodPath("777", downloadInfo.getWorkspace().getAbsolutePath());
+                        PackageUtil.installBySystem(MainActivity.this, downloadInfo.getLocalFile());
                         break;
                     }
                     case Status.STATE_DOWNLOAD: {
@@ -92,15 +95,27 @@ public class MainActivity extends Activity {
 
         // 创建下载管理对象，并指定下载文件目录workspace
         downloadManager = new DownloadManager(new File(getCacheDir(), "download"));
+        downloadManager.setFileType(".apk");
+        // 初始化状态
+
+        Collection<DownloadInfo> downloadInfos = downloadManager.loadAllDownloadInfos();
+        for(DownloadInfo downloadInfo : downloadInfos) {
+            if(downloadInfo.getState() == Status.STATE_DOWNLOAD) {
+                downloadInfo.setState(Status.STATE_PAUSE);
+            }
+//            downloadManager.addDownloadInfo(downloadInfo);
+        }
+
 //        downloadManager.setFileType(".cha");
         // 得到一个已经存在或者不存在的DownloadInfo对象
         downloadInfo = downloadManager.getDownloadInfo(url);
         downloadInfo.setFileType(".apk");
+        showState(downloadInfo);
 
 
         /****  *****  *****  ****/
         // 我们模拟数据库中存在该下载对象，那么在初始化的时候就要把下载加入到队列中
-        downloadManager.addDownloadInfo(downloadInfo);
+//        downloadManager.addDownloadInfo(downloadInfo);
 
 
         // 根据状态显示文字
@@ -111,7 +126,7 @@ public class MainActivity extends Activity {
          */
         downloadManager.registerOnStateChangeListener(onStateChangeListener=new DownloadManager.OnStateChangeListener() {
             @Override
-            public void onStateChange(DownloadInfo downloadInfo, DownloadTask task) {
+            public void onStateChange(DownloadInfo downloadInfo, DownloadManager manager) {
                 Log.i("APP_INFO", downloadInfo.getName() + " -> "+downloadInfo.getState() +" e:"+downloadInfo.getException());
                 if(downloadInfo.equals(MainActivity.this.downloadInfo)) {
                     if (downloadInfo.getState() == Status.STATE_SUCCESS) {
@@ -141,19 +156,39 @@ public class MainActivity extends Activity {
                 break;
             }
             case Status.STATE_SUCCESS: {
-                btn.setText("安装");
+                if("bc415853dbb22a307a2fb566890b5abe".equals(MD5Util.getMd5ByFile(downloadInfo.getLocalFile()))) {
+                    btn.setText("安装");
+                }
+                else{
+                    btn.setText("MD5校验失败");
+                }
                 break;
             }
             case Status.STATE_START:
-            case Status.STATE_RESUME:
+            case Status.STATE_RESUME: {
+                btn.setText("等待下载...");
+                break;
+            }
             case Status.STATE_DOWNLOAD: {
                 btn.setText("暂停");
                 break;
             }
+
+            case Status.PAUSE: {
+                btn.setText("暂停中...");
+                break;
+            }
+            case Status.CANCEL: {
+                btn.setText("取消中...");
+                break;
+            }
+
             default: {
                 btn.setText("下载");
             }
         }
+        seek.setProgress((int) downloadInfo.getProgress());
+        seek.setMax((int) downloadInfo.getTotal());
     }
 
     @Override

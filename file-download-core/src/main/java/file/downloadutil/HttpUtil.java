@@ -12,7 +12,6 @@ import java.net.URL;
  */
 
 public class HttpUtil {
-    static String TAG = HttpUtil.class.getSimpleName();
     static InputStream getDownLoadFileIo(String path, long progress, long size) throws IOException {
         URL url = new URL(path);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
@@ -29,7 +28,8 @@ public class HttpUtil {
     static long getLength(String httpFileUrl) throws IOException {
         URL url = new URL(httpFileUrl);
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-        connection.setReadTimeout(25 * 1000);
+        connection.setConnectTimeout(25000);
+        connection.setReadTimeout(25000);
         String length = connection.getHeaderField("Content-Length"); // 获取文件长度
 
         LogInfo.i("下载APK前，获取文件真实大小 ResponseCode "+connection.getResponseCode());

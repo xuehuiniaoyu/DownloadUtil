@@ -28,7 +28,6 @@ import java.io.File;
 
 import file.downloadutil.DownloadInfo;
 import file.downloadutil.DownloadManager;
-import file.downloadutil.DownloadTask;
 import file.downloadutil.Status;
 
 /**
@@ -84,7 +83,7 @@ public class PicDownloadActivity extends Activity/* implements AdapterView.OnIte
         downloadManager.setDefaultSplitCount(2);
         downloadManager.registerOnStateChangeListener(onStateChangeListener = new DownloadManager.OnStateChangeListener() {
             @Override
-            public void onStateChange(DownloadInfo downloadInfo, DownloadTask task) {
+            public void onStateChange(DownloadInfo downloadInfo, DownloadManager manager) {
                 Log.i(PicDownloadActivity.class.getSimpleName(), "正在下载："+downloadInfo);
                 if(downloadInfo.getState() == Status.STATE_SUCCESS) {
                     Log.i(PicDownloadActivity.class.getSimpleName(), "完成下载："+downloadInfo);

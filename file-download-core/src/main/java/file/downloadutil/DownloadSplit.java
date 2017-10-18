@@ -1,7 +1,5 @@
 package file.downloadutil;
 
-import android.util.Log;
-
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -60,8 +58,8 @@ class DownloadSplit implements Runnable {
     public void run() {
         LogInfo.d(downloadInfo+" 分段"+id+"开始下载");
         File mkFile = new File(workspace, "task-"+id+".mk");
-        RandomAccessFile mkRaf = null;
         RandomAccessFile localRaf = null;
+        RandomAccessFile mkRaf = null;
         try {
             mkRaf = new RandomAccessFile(mkFile, "rw");
             mkRaf.seek(0);
@@ -82,8 +80,8 @@ class DownloadSplit implements Runnable {
                 int len;
                 boolean alive = true;
                 exception = null;
-                while (alive && (len = ins.read(b)) != -1) {
-                    if (downloadInfo.getState() == Status.STATE_PAUSE || downloadInfo.getState() == Status.STATE_CANCEL) {
+                while (downloadTask.aliveInfo.alive && alive && (len = ins.read(b)) != -1) {
+                    if (downloadInfo.getState() == Status.PAUSE || downloadInfo.getState() == Status.CANCEL) {
                         exception = new PauseException();
                         break;
                     }

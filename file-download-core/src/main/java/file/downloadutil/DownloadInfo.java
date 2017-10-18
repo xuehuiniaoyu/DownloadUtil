@@ -1,7 +1,6 @@
 package file.downloadutil;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.lang.reflect.Field;
@@ -12,11 +11,11 @@ import java.text.MessageFormat;
  */
 
 public class DownloadInfo {
-    private int state = Status.STATE_DEFAULT;
+    int state = Status.STATE_DEFAULT;
 
     private String name;
     /** 下载地址 **/
-    private String url;
+    String url;
 
     /** 下载工作空间 **/
     private File workspace;
@@ -24,18 +23,18 @@ public class DownloadInfo {
     /** 本地源文件 **/
     private File localFile;
 
-    /** 状态文件 **/
-    private File localStateFile;
-
     // 进度
     private long progress;
     // 总大小
-    private long total;
+    long total;
+
+    // 下载线程数
+    int splitCount;
 
     private Exception exception;
 
-    private RandomAccessFile localStateRandomAccessFile;
-    private boolean over;
+    // 进度文件
+    private ScheduleFile scheduleFile;
 
     /**
      * 文件类型
@@ -45,20 +44,27 @@ public class DownloadInfo {
     public DownloadInfo() {
     }
 
+    public DownloadInfo(File workspace, String name) {
+        this(workspace, name, null);
+    }
+
     public DownloadInfo(File workspace, String name, String url) {
         this.workspace = new File(workspace, this.name = name);
         if(!this.workspace.exists()) {
             this.workspace.mkdirs();
         }
         this.url = url;
-        try {
-            localStateRandomAccessFile = new RandomAccessFile(getLocalStateFile(), "rw");
-            state = localStateRandomAccessFile.readInt();
-        } catch (FileNotFoundException e) {
-            // 文件不存在
-        } catch (IOException e) {
-            // 可能是第一次创建
+        init();
+    }
+
+    void init() {
+        // 从本地加载进度
+        loadProgress(this.workspace);
+        LogInfo.i("progress="+getProgress());
+        if(scheduleFile == null || !scheduleFile.exists()) {
+            scheduleFile = new ScheduleFile(this.workspace, "______file.sch");
         }
+        scheduleFile.get(this);
     }
 
     public DownloadInfo(DownloadInfo downloadInfo) {
@@ -82,12 +88,6 @@ public class DownloadInfo {
         return localFile = new File(workspace, "______file" + fileType);
     }
 
-    public File getLocalStateFile() {
-        if(localStateFile != null)
-            return localStateFile;
-        return localStateFile = new File(workspace, "______file.state");
-    }
-
     public String getName() {
         return name;
     }
@@ -96,37 +96,25 @@ public class DownloadInfo {
         return url;
     }
 
+    public void setUrl(String url) {
+        this.url = url;
+    }
+
     public int getState() {
         return state;
     }
 
     public void setState(int state) {
         this.state = state;
+        scheduleFile.set(this);
+    }
 
-        // 保存状态
-        if(localStateRandomAccessFile == null) {
-            try {
-                localStateRandomAccessFile = new RandomAccessFile(getLocalStateFile(), "rw");
-            } catch (FileNotFoundException e) {
-                // 文件不存在
-            }
-        }
+    public ScheduleFile getScheduleFile() {
+        return scheduleFile;
+    }
 
-        try {
-            localStateRandomAccessFile.seek(0);
-            localStateRandomAccessFile.writeInt(this.state);
-        } catch (Exception e) {
-
-        } finally {
-            if(over) {
-                try {
-                    localStateRandomAccessFile.close();
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-            localStateRandomAccessFile = null;
-        }
+    public void setScheduleFile(ScheduleFile scheduleFile) {
+        this.scheduleFile = scheduleFile;
     }
 
     public File getWorkspace() {
@@ -147,6 +135,7 @@ public class DownloadInfo {
 
     public void setTotal(long total) {
         this.total = total;
+        scheduleFile.set(this);
     }
 
     public Exception getException() {
@@ -170,11 +159,33 @@ public class DownloadInfo {
         return MessageFormat.format("[{0} - {1} - {2} ------- {3}]", name, progress, total, state);
     }
 
-    /**
-     * 生命历程的结束
-     */
-    public void over() {
-        over = true;
+    public void loadProgress(File workspace) {
+        long progress = 0;
+        if(workspace.exists()) {
+            for (File file : workspace.listFiles()) {
+                if (file.getName().contains(".mk")) {
+                    RandomAccessFile mkRaf = null;
+                    try {
+                        mkRaf = new RandomAccessFile(file, "rw");
+                        mkRaf.seek(0);
+                        progress += mkRaf.readLong();
+                    } catch (Exception e) {
+                    } finally {
+                        if (mkRaf != null) {
+                            try {
+                                mkRaf.close();
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        else {
+            workspace.mkdirs();
+        }
+        this.progress = progress;
     }
 
     public int getSplitCount(int defaultSplitCount) {
@@ -186,12 +197,20 @@ public class DownloadInfo {
                 }
             }
         } catch (Exception e) {} if (splitCount == 0) {
+            splitCount = -1;
+        }
+        if(splitCount != this.splitCount) {
+            for (File file : workspace.listFiles()) {
+                if (file.getName().contains(".mk")) {
+                    splitCount += 1;
+                }
+            }
             splitCount = defaultSplitCount;
         }
-        return splitCount;
+        return this.splitCount = splitCount;
     }
 
-    public interface OnStateChangeListener {
-        void onStateChange(DownloadInfo downloadInfo);
+    public int getSplitCount() {
+        return splitCount;
     }
 }

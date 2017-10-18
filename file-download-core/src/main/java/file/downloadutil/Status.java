@@ -11,11 +11,11 @@ public class Status {
     public static final int RESUME = 3;
     public static final int CANCEL = 4;
 
-    public static final int STATE_START = 5;
-    public static final int STATE_DOWNLOAD = 6;
-    public static final int STATE_PAUSE = 7;
-    public static final int STATE_CANCEL = 8;
-    public static final int STATE_RESUME = 9;
-    public static final int STATE_ERROR = 10;
-    public static final int STATE_SUCCESS = 11;
+    public static final int STATE_START = 6;
+    public static final int STATE_DOWNLOAD = 7;
+    public static final int STATE_PAUSE = 8;
+    public static final int STATE_CANCEL = 9;
+    public static final int STATE_RESUME = 10;
+    public static final int STATE_ERROR = 11;
+    public static final int STATE_SUCCESS = 12;
 }
