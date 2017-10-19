@@ -134,6 +134,7 @@ public class MainActivity extends Activity {
                         Log.i("APP_INFO", "md5 is " + MD5Util.getMd5ByFile(file));
                     }
                     mHandler.sendMessage(mHandler.obtainMessage(0, downloadInfo));
+                    Log.i("APP_INFO", manager.toString());
                 }
             }
         });

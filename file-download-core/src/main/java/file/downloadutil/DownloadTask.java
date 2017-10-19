@@ -82,10 +82,6 @@ class DownloadTask extends LoudspeakerObserable {
         send(this.downloadInfo = downloadInfo, downloadManager);
     }
 
-    public DownloadManager getDownloadManager() {
-        return downloadManager;
-    }
-
     public void setDownloadManager(DownloadManager downloadManager) {
         this.downloadManager = downloadManager;
     }
@@ -95,7 +91,6 @@ class DownloadTask extends LoudspeakerObserable {
         progressMonitor.alive = false;
         progressMonitor = null;
         send(downloadInfo, downloadManager);
-        downloadManager = null;
         onResetListener.onReset(this);
     }
 

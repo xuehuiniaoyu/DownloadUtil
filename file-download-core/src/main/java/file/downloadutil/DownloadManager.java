@@ -1,7 +1,5 @@
 package file.downloadutil;
 
-import android.util.Log;
-
 import java.io.File;
 import java.io.IOException;
 import java.math.BigInteger;
@@ -99,6 +97,7 @@ public class DownloadManager implements DownloadTask.OnResetListener {
 
     public void addDownloadTask(long notifyIntervalTime) {
         DownloadTask downloadTask = new DownloadTask();
+        downloadTask.setDownloadManager(this);
         downloadTask.setNotifyIntervalTime(notifyIntervalTime);
         downloadTask.setOnResetListener(this);
         downloadTasks.add(downloadTask);
