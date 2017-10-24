@@ -81,7 +81,8 @@ class DownloadSplit implements Runnable {
                 boolean alive = true;
                 exception = null;
                 while (downloadTask.aliveInfo.alive && alive && (len = ins.read(b)) != -1) {
-                    if (downloadInfo.getState() == Status.PAUSE || downloadInfo.getState() == Status.CANCEL) {
+                    if (downloadInfo.getState() == Status.PAUSE || downloadInfo.getState() == Status.CANCEL
+                            || downloadInfo.getState() == Status.STATE_PAUSE_BY_SYS) {
                         exception = new PauseException();
                         break;
                     }
@@ -89,7 +90,7 @@ class DownloadSplit implements Runnable {
                     cursor += len;
                     mkRaf.seek(0);
                     mkRaf.writeLong(cursor);
-                    LogInfo.d(">>>>>> " + len+" >>> "+cursor+"/"+length);
+//                    LogInfo.d(">>>>>> " + len+" >>> "+cursor+"/"+length);
                 }
                 if(!(exception instanceof PauseException)) {
                     success = true;

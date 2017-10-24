@@ -41,6 +41,11 @@ public class DownloadInfo {
      */
     private String fileType;
 
+    /**
+     * 可携带的对象
+     */
+    private Object tag;
+
     public DownloadInfo() {
     }
 
@@ -154,6 +159,14 @@ public class DownloadInfo {
         this.fileType = fileType;
     }
 
+    public <T> T getTag() {
+        return (T) tag;
+    }
+
+    public void setTag(Object tag) {
+        this.tag = tag;
+    }
+
     @Override
     public String toString() {
         return MessageFormat.format("[{0} - {1} - {2} ------- {3}]", name, progress, total, state);
@@ -212,5 +225,20 @@ public class DownloadInfo {
 
     public int getSplitCount() {
         return splitCount;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if(obj instanceof DownloadInfo) {
+            if(((DownloadInfo)obj).name.equals(this.name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public int hashCode() {
+        return this.name.hashCode();
     }
 }

@@ -66,7 +66,7 @@ public class MainActivity extends Activity {
             public void onClick(View v) {
                 switch (downloadInfo.getState()) {
                     case Status.STATE_PAUSE: {
-                        downloadManager.resume(downloadInfo.getUrl());
+                        downloadManager.resume(downloadInfo.getName());
                         break;
                     }
                     case Status.STATE_ERROR: {
@@ -79,7 +79,7 @@ public class MainActivity extends Activity {
                         break;
                     }
                     case Status.STATE_DOWNLOAD: {
-                        downloadManager.pause(downloadInfo.getUrl());
+                        downloadManager.pause(downloadInfo.getName());
                         break;
                     }
                     default: {
@@ -108,7 +108,7 @@ public class MainActivity extends Activity {
 
 //        downloadManager.setFileType(".cha");
         // 得到一个已经存在或者不存在的DownloadInfo对象
-        downloadInfo = downloadManager.getDownloadInfo(url);
+        downloadInfo = downloadManager.getDownloadInfo("download-id", url);
         downloadInfo.setFileType(".apk");
         showState(downloadInfo);
 

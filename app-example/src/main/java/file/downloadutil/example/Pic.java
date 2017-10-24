@@ -3,8 +3,6 @@ package file.downloadutil.example;
 import android.graphics.Bitmap;
 import android.util.Log;
 
-import java.io.File;
-
 import file.downloadutil.DownloadInfo;
 import file.downloadutil.DownloadManager;
 
@@ -17,7 +15,7 @@ public class Pic extends DownloadInfo {
 
     public Pic(String url, DownloadManager dm) {
         super();
-        DownloadInfo downloadInfo = dm.getDownloadInfo(url);
+        DownloadInfo downloadInfo = dm.getDownloadInfo(MD5Util.getMd5ByFile(url), url);
         this.loadFrom(downloadInfo);
         setFileType(url.substring(url.lastIndexOf(".")));
         Log.i("Pic", "fileType is "+getFileType());

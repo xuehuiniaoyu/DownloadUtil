@@ -4,7 +4,6 @@ import android.support.annotation.NonNull;
 import android.util.Log;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.net.URI;
@@ -47,7 +46,7 @@ public class ScheduleFile extends File {
 
 
     public boolean set(DownloadInfo downloadInfo) {
-        if(downloadInfo.getUrl() != null) {
+        if(downloadInfo.getUrl() != null && exists()) {
             try {
                 RandomAccessFile raf = new RandomAccessFile(this, "rw");
                 raf.seek(0);

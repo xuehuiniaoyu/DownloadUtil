@@ -2,13 +2,14 @@ package file.downloadutil;
 
 import java.io.File;
 import java.io.IOException;
-import java.math.BigInteger;
 import java.net.SocketTimeoutException;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Observable;
 import java.util.Observer;
@@ -28,6 +29,11 @@ public class DownloadManager implements DownloadTask.OnResetListener {
     private int defaultSplitCount = 3;
 
     /**
+     * 运行队列
+     */
+    private final List<DownloadTask> waitTaskQueue = new ArrayList<DownloadTask>();
+
+    /**
      * 同时支持的下载任务
      */
     private List<DownloadTask> downloadTasks = new ArrayList<>();
@@ -35,7 +41,35 @@ public class DownloadManager implements DownloadTask.OnResetListener {
     /**
      * 等待队列
      */
-    private List<DownloadInfo> waitQueue = new ArrayList<>();
+    private List<DownloadInfo> waitQueue = new LinkedList<DownloadInfo>() {
+        @Override
+        public boolean add(DownloadInfo o) {
+            super.remove(o);
+            LogInfo.i(o + " >>> 已添加到等待队列！");
+            o.setState(Status.STATE_WAIT + o.getState());
+            cannotBeSendByWorkingTaskObservable.send(o, DownloadManager.this);
+            return super.add(o);
+        }
+
+        @Override
+        public void add(int index, DownloadInfo o) {
+            super.remove(o);
+            LogInfo.i(o + " >>> 已添加到等待队列！");
+            o.setState(Status.STATE_WAIT + o.getState());
+            cannotBeSendByWorkingTaskObservable.send(o, DownloadManager.this);
+            super.add(index, o);
+        }
+
+        @Override
+        public DownloadInfo remove(int index) {
+            DownloadInfo o = super.remove(index);
+            o.setState(o.getState() - Status.STATE_WAIT);
+//            if(o.getState() < 0) {
+//                o.setState(Status.START);
+//            }
+            return o;
+        }
+    };
 
 
     /**
@@ -47,7 +81,28 @@ public class DownloadManager implements DownloadTask.OnResetListener {
     /**
      * 下载队列
      */
-    private HashMap<String, DownloadInfo> queue = new HashMap<>();
+    private HashMap<String, DownloadInfo> queue = new HashMap<String, DownloadInfo>() {
+        @Override
+        public DownloadInfo put(String key, DownloadInfo value) {
+            DownloadInfo d = super.put(key, value);
+            if(!queueSeq.contains(value)) {
+                queueSeq.add(value);
+                onDownloadInfoAdded(value, DownloadManager.this);
+            }
+            return d;
+        }
+
+        @Override
+        public DownloadInfo remove(Object key) {
+            DownloadInfo d = super.remove(key);
+            if(d != null) {
+                queueSeq.remove(d);
+                onDownloadInfoRemoved(d, DownloadManager.this);
+            }
+            return d;
+        }
+    };
+    private List<DownloadInfo> queueSeq = new ArrayList<>();
 
     public DownloadManager(File workspace) {
         this(workspace, 1000);
@@ -67,6 +122,7 @@ public class DownloadManager implements DownloadTask.OnResetListener {
             this.workspace.mkdirs();
         }
         this.fileType = fileType;
+        addDownloadTask(notifyIntervalTime);
         addDownloadTask(notifyIntervalTime);
     }
 
@@ -96,22 +152,29 @@ public class DownloadManager implements DownloadTask.OnResetListener {
     }
 
     public void addDownloadTask(long notifyIntervalTime) {
-        DownloadTask downloadTask = new DownloadTask();
+        DownloadTask downloadTask = new DownloadTask() {
+            { waitTaskQueue.add(this); }
+            @Override
+            void setWorking(boolean working) {
+                super.setWorking(working);
+                if(working) {
+                    waitTaskQueue.remove(this);
+                }
+                else {
+                    if(!waitTaskQueue.contains(this)) {
+                        waitTaskQueue.add(this);
+                    }
+                }
+            }
+        };
         downloadTask.setDownloadManager(this);
         downloadTask.setNotifyIntervalTime(notifyIntervalTime);
         downloadTask.setOnResetListener(this);
         downloadTasks.add(downloadTask);
     }
 
-    public void start(String url) {
-        DownloadInfo downloadInfo = getDownloadInfo(url);
-        start(downloadInfo);
-    }
-
     public void start(DownloadInfo downloadInfo) {
-        if(!queue.containsKey(downloadInfo.getName())) {
-            queue.put(downloadInfo.getName(), downloadInfo);
-        }
+        queue.put(downloadInfo.getName(), downloadInfo);
         downloadInfo.init();
         if(getDownloadTask(downloadInfo) == null) {
             DownloadTask freeDownloadTask = getFreeDownloadTask();
@@ -129,8 +192,32 @@ public class DownloadManager implements DownloadTask.OnResetListener {
         }
     }
 
-    public void resume(String url) {
-        String name = string_md5(url);
+    /**
+     * 优先下载
+     * @param downloadInfo
+     * @param priority
+     */
+    public void start(DownloadInfo downloadInfo, boolean priority) {
+        if (priority && waitTaskQueue.size() == 0) {
+            queue.put(downloadInfo.getName(), downloadInfo);
+            downloadInfo.init();
+            if(getDownloadTask(downloadInfo) == null) {
+                for (DownloadTask task : downloadTasks) {
+                    if (task.isWorking()) {
+                        DownloadInfo d = task.getDownloadInfo();
+                        d.setState(Status.STATE_PAUSE_BY_SYS);
+                        downloadInfo.setState(Status.START);
+                        waitQueue.add(0, downloadInfo);
+                        LogInfo.i(downloadInfo + " 被优先下载！");
+                        return;
+                    }
+                }
+            }
+        }
+        start(downloadInfo);
+    }
+
+    public void resume(String name) {
         if(queue.containsKey(name)) {
             DownloadInfo downloadInfo = queue.get(name);
             downloadInfo.init();
@@ -150,8 +237,39 @@ public class DownloadManager implements DownloadTask.OnResetListener {
         }
     }
 
-    public void pause(String url) {
-        String name = string_md5(url);
+    /**
+     * 优先唤醒
+     * @param name
+     * @param priority
+     */
+    public void resume(String name, boolean priority) {
+        if (priority && waitTaskQueue.size() == 0) {
+            DownloadInfo downloadInfo;
+            if(queue.containsKey(name)) {
+                downloadInfo = queue.get(name);
+            }
+            else {
+                LogInfo.e("队列中不存在，无法完成继续下载！");
+                return;
+            }
+            downloadInfo.init();
+            if(getDownloadTask(downloadInfo) == null) {
+                for (DownloadTask task : downloadTasks) {
+                    if (task.isWorking()) {
+                        DownloadInfo d = task.getDownloadInfo();
+                        d.setState(Status.STATE_PAUSE_BY_SYS);
+                        downloadInfo.setState(Status.START);
+                        waitQueue.add(0, downloadInfo);
+                        LogInfo.i(downloadInfo + " 被优先唤醒！");
+                        return;
+                    }
+                }
+            }
+        }
+        resume(name);
+    }
+
+    public void pause(String name) {
         if(queue.containsKey(name)) {
             DownloadInfo downloadInfo = queue.get(name);
             DownloadTask task = getDownloadTask(downloadInfo);
@@ -169,8 +287,7 @@ public class DownloadManager implements DownloadTask.OnResetListener {
         }
     }
 
-    public void cancel(String url) {
-        String name = string_md5(url);
+    public void cancel(String name) {
         if(queue.containsKey(name)) {
             DownloadInfo downloadInfo = queue.get(name);
             if(getDownloadTask(downloadInfo) != null) {
@@ -186,11 +303,11 @@ public class DownloadManager implements DownloadTask.OnResetListener {
                 downloadInfo.setProgress(0);
                 cannotBeSendByWorkingTaskObservable.send(downloadInfo, DownloadManager.this);
             }
-            queue.remove(downloadInfo);
+            queue.remove(name);
         }
     }
 
-    public String string_md5(String val) {
+    /*public String string_md5(String val) {
         try {
             MessageDigest md5 = MessageDigest.getInstance("MD5");
             md5.update(val.getBytes());
@@ -199,7 +316,7 @@ public class DownloadManager implements DownloadTask.OnResetListener {
         } catch (NoSuchAlgorithmException e) {
             return null;
         }
-    }
+    }*/
 
     private class TaskRunner implements Runnable {
         private DownloadInfo downloadInfo;
@@ -287,15 +404,6 @@ public class DownloadManager implements DownloadTask.OnResetListener {
 
     /**
      * 删除所有文件
-     * @param url
-     */
-    public void removeAllFiles(String url) {
-        String name = string_md5(url);
-        removeAllFiles(queue.remove(name));
-    }
-
-    /**
-     * 删除所有文件
      * @param downloadInfo
      */
     public void removeAllFiles(DownloadInfo downloadInfo) {
@@ -359,23 +467,35 @@ public class DownloadManager implements DownloadTask.OnResetListener {
 
     @Override
     public void onReset(DownloadTask downloadTask) {
-        switch (downloadTask.getDownloadInfo().getState()) {
-            case Status.STATE_CANCEL:
-            case Status.STATE_ERROR:
-            removeAllFiles(downloadTask.getDownloadInfo());
+        DownloadInfo taskDownloadInfo = downloadTask.getDownloadInfo();
+        if(taskDownloadInfo.getState() == Status.STATE_PAUSE_BY_SYS) {
+            taskDownloadInfo.setState(Status.RESUME);
+            waitQueue.add(taskDownloadInfo);
+            LogInfo.i(taskDownloadInfo+"被临时暂停!");
+            downloadTask.send(taskDownloadInfo, DownloadManager.this);
+        }
+        else {
+            switch (downloadTask.getDownloadInfo().getState()) {
+                case Status.STATE_CANCEL:
+                case Status.STATE_ERROR:
+                    removeAllFiles(downloadTask.getDownloadInfo());
+                    break;
+                default:
+                    break;
+            }
         }
         downloadTask.setDownloadInfo(null);
         LogInfo.d("task 初始化完成！");
         if(waitQueue.size() > 0) {
             DownloadInfo wait0 = waitQueue.remove(0);
             LogInfo.d("下载等待队列中的第一个:" + wait0);
-            downloadTask.setWorking(true);
             new Thread(new TaskRunner(wait0, wait0.getState()).setDownloadTask(downloadTask)).start();
             LogInfo.d("等待队列中的剩余数量为："+waitQueue.size());
         }
         else {
             downloadTask.setWorking(false);
         }
+        LogInfo.d("任务队列："+waitTaskQueue);
     }
 
     public static abstract class OnStateChangeListener implements Observer {
@@ -403,20 +523,25 @@ public class DownloadManager implements DownloadTask.OnResetListener {
 
     /**
      * 是否存在
-     * @param url
+     * @param name
      * @return
      */
-    public boolean has(String url) {
-        return queue.containsKey(string_md5(url));
+    public boolean has(String name) {
+        return queue.containsKey(name);
     }
 
-    public DownloadInfo getDownloadInfo(String url) {
-        String name = string_md5(url);
+    public DownloadInfo getDownloadInfo(String name, String url) {
+        DownloadInfo downloadInfo;
         if(queue.containsKey(name)) {
-            return queue.get(name);
+            downloadInfo = queue.get(name);
         }
-        DownloadInfo downloadInfo = new DownloadInfo(workspace, name, url);
-        downloadInfo.setFileType(fileType);
+        else {
+            downloadInfo = new DownloadInfo(workspace, name, url);
+            downloadInfo.setFileType(fileType);
+        }
+        if(!downloadInfo.getUrl().equals(url)) {
+            downloadInfo.setUrl(url);
+        }
         return downloadInfo;
     }
 
@@ -441,15 +566,46 @@ public class DownloadManager implements DownloadTask.OnResetListener {
      * @return
      */
     public final Collection<DownloadInfo> loadAllDownloadInfos() {
-        for(File file : workspace.listFiles()) {
+        File[] files = workspace.listFiles();
+        List<File> filesSeq = Arrays.asList(files);
+        Collections.sort(filesSeq, new Comparator<File>() {
+            @Override
+            public int compare(File o1, File o2) {
+                if(o2.lastModified() > o1.lastModified())
+                    return -1;
+                return 1;
+            }
+        });
+        for(File file : filesSeq) {
             if(!queue.containsKey(file.getName())) {
                 DownloadInfo downloadInfo = getDownloadInfoByName(file.getName());
                 if(downloadInfo.getUrl() != null) {
-                    if (!downloadInfo.getLocalFile().exists()) {
+                    LogInfo.i("初始化1."+downloadInfo.getName()+" --- "+downloadInfo.getState());
+                    if (downloadInfo.getState() == Status.STATE_DOWNLOAD && !downloadInfo.getLocalFile().exists()) {
                         removeAllFiles(downloadInfo);
                         downloadInfo.setProgress(0);
-                        downloadInfo.setState(Status.STATE_DEFAULT);
+                        downloadInfo.setState(Status.STATE_ERROR);
                     }
+                    if(downloadInfo.getState() == Status.STATE_SUCCESS) {
+
+                    }
+                    else if(downloadInfo.getState() == Status.STATE_ERROR) {
+                        removeAllFiles(downloadInfo);
+                        downloadInfo.setProgress(0);
+                    }
+                    else {
+                        downloadInfo.setState(Status.STATE_PAUSE);
+                    }
+                    LogInfo.i("初始化2."+downloadInfo.getName()+" --- "+downloadInfo.getState());
+                    /*switch (downloadInfo.getState()) {
+                        case Status.STATE_WAIT + Status.START:
+                        case Status.STATE_WAIT + Status.RESUME: {
+                            waitQueue.add(downloadInfo);
+                            break;
+                        }
+                        default:
+                            break;
+                    }*/
                     addDownloadInfo(downloadInfo);
                 }
                 else {
@@ -462,5 +618,19 @@ public class DownloadManager implements DownloadTask.OnResetListener {
 
     public Collection<DownloadInfo> getAllDownloads() {
         return queue.values();
+    }
+
+    public List<DownloadInfo> getAllDownloadsSeq() {
+        return queueSeq;
+    }
+
+    ///////////////////////////////////////////////////////////////////
+    // 可以重写的方法
+    protected void onDownloadInfoAdded(DownloadInfo downloadInfo, DownloadManager dm) {
+        LogInfo.i(downloadInfo+" 加入了队列！");
+    }
+
+    protected void onDownloadInfoRemoved(DownloadInfo downloadInfo, DownloadManager dm) {
+        LogInfo.i(downloadInfo+" 从队列中删除！");
     }
 }

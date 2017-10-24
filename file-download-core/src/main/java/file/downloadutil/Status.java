@@ -18,4 +18,10 @@ public class Status {
     public static final int STATE_RESUME = 10;
     public static final int STATE_ERROR = 11;
     public static final int STATE_SUCCESS = 12;
+
+    /** 系统暂停，非人为的，主要是给被优先下载的任务让位 **/
+    public static final int STATE_PAUSE_BY_SYS = 13;
+
+    /** 等待 **/
+    public static final int STATE_WAIT = 100;
 }

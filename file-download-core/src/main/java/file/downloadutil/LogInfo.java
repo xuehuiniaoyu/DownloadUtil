@@ -30,4 +30,22 @@ public class LogInfo {
             Log.e(LOG_TAG, log + "");
         }
     }
+
+    public static final void i(String tag, Object log) {
+        if(debug) {
+            Log.i(LOG_TAG, tag + ":" + log);
+        }
+    }
+
+    public static final void d(String tag, Object log) {
+        if(debug) {
+            Log.d(LOG_TAG, tag + ":" + log);
+        }
+    }
+
+    public static final void e(String tag, Object log) {
+        if(debug) {
+            Log.e(LOG_TAG, tag + ":" + log);
+        }
+    }
 }
