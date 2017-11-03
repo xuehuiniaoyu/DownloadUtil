@@ -1,5 +1,7 @@
 package file.downloadutil;
 
+import android.support.annotation.CallSuper;
+
 import java.io.File;
 import java.io.IOException;
 import java.net.SocketTimeoutException;
@@ -84,22 +86,23 @@ public class DownloadManager implements DownloadTask.OnResetListener {
     private HashMap<String, DownloadInfo> queue = new HashMap<String, DownloadInfo>() {
         @Override
         public DownloadInfo put(String key, DownloadInfo value) {
-            DownloadInfo d = super.put(key, value);
-            if(!queueSeq.contains(value)) {
+            if(!containsKey(key)) {
+                DownloadInfo d = super.put(key, value);
                 queueSeq.add(value);
                 onDownloadInfoAdded(value, DownloadManager.this);
+                return d;
             }
-            return d;
+            return null;
         }
 
         @Override
         public DownloadInfo remove(Object key) {
-            DownloadInfo d = super.remove(key);
-            if(d != null) {
+            DownloadInfo d = super.get(key);
+            if (d != null) {
                 queueSeq.remove(d);
                 onDownloadInfoRemoved(d, DownloadManager.this);
             }
-            return d;
+            return super.remove(key);
         }
     };
     private List<DownloadInfo> queueSeq = new ArrayList<>();
@@ -298,12 +301,10 @@ public class DownloadManager implements DownloadTask.OnResetListener {
                 if(waitQueue.contains(downloadInfo)) {
                     waitQueue.remove(downloadInfo);
                 }
-                removeAllFiles(downloadInfo);
                 downloadInfo.setState(Status.STATE_CANCEL);
                 downloadInfo.setProgress(0);
                 cannotBeSendByWorkingTaskObservable.send(downloadInfo, DownloadManager.this);
             }
-            queue.remove(name);
         }
     }
 
@@ -626,11 +627,15 @@ public class DownloadManager implements DownloadTask.OnResetListener {
 
     ///////////////////////////////////////////////////////////////////
     // 可以重写的方法
+    @CallSuper
     protected void onDownloadInfoAdded(DownloadInfo downloadInfo, DownloadManager dm) {
         LogInfo.i(downloadInfo+" 加入了队列！");
     }
 
+    @CallSuper
     protected void onDownloadInfoRemoved(DownloadInfo downloadInfo, DownloadManager dm) {
         LogInfo.i(downloadInfo+" 从队列中删除！");
+        dm.queue.remove(downloadInfo.getName());
+        removeAllFiles(downloadInfo);
     }
 }
