@@ -304,6 +304,7 @@ public class DownloadManager implements DownloadTask.OnResetListener {
                 downloadInfo.setState(Status.STATE_CANCEL);
                 downloadInfo.setProgress(0);
                 cannotBeSendByWorkingTaskObservable.send(downloadInfo, DownloadManager.this);
+                queue.remove(name);
             }
         }
     }
@@ -478,6 +479,7 @@ public class DownloadManager implements DownloadTask.OnResetListener {
         else {
             switch (downloadTask.getDownloadInfo().getState()) {
                 case Status.STATE_CANCEL:
+                    queue.remove(downloadTask.getDownloadInfo().getName());
                 case Status.STATE_ERROR:
                     removeAllFiles(downloadTask.getDownloadInfo());
                     break;
@@ -635,7 +637,6 @@ public class DownloadManager implements DownloadTask.OnResetListener {
     @CallSuper
     protected void onDownloadInfoRemoved(DownloadInfo downloadInfo, DownloadManager dm) {
         LogInfo.i(downloadInfo+" 从队列中删除！");
-        dm.queue.remove(downloadInfo.getName());
         removeAllFiles(downloadInfo);
     }
 }
