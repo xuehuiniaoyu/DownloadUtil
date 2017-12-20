@@ -47,7 +47,7 @@ public class MainActivity extends Activity {
         findViewById(R.id.cancel).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                downloadManager.cancel(url);
+                downloadManager.cancel(downloadInfo.getName());
             }
         });
         findViewById(R.id.jump).setOnClickListener(new View.OnClickListener() {

@@ -92,7 +92,10 @@ class DownloadSplit implements Runnable {
                     mkRaf.writeLong(cursor);
 //                    LogInfo.d(">>>>>> " + len+" >>> "+cursor+"/"+length);
                 }
-                if(!(exception instanceof PauseException)) {
+                if(exception != null) {
+                    LogInfo.d("exception is " + exception.getClass());
+                }
+                if(exception == null) {
                     success = true;
                 }
             } catch (Exception e) {
@@ -156,5 +159,10 @@ class DownloadSplit implements Runnable {
     }
 
     /** 暂停或取消是抛出的异常，用来阻止成功 **/
-    public static class PauseException extends Exception {}
+    public static class PauseException extends Exception {
+        @Override
+        public String toString() {
+            return "user pause or cancel!";
+        }
+    }
 }

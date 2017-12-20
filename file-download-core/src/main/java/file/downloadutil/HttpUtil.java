@@ -13,8 +13,8 @@ public class HttpUtil {
     static InputStream getDownLoadFileIo(String path, long progress, long size) throws IOException {
         URL url = new URL(path);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        conn.setConnectTimeout(25000);
-        conn.setReadTimeout(25000);
+        conn.setConnectTimeout(10000);
+        conn.setReadTimeout(5000);
         conn.setRequestMethod("GET");
         conn.setRequestProperty("Charset", "UTF-8");
         conn.setRequestProperty("Referer", url.toString());

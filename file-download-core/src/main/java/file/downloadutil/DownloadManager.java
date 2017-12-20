@@ -306,6 +306,7 @@ public class DownloadManager implements DownloadTask.OnResetListener {
                 cannotBeSendByWorkingTaskObservable.send(downloadInfo, DownloadManager.this);
                 queue.remove(name);
             }
+            cannotBeSendByWorkingTaskObservable.send(downloadInfo, this);
         }
     }
 
@@ -353,7 +354,9 @@ public class DownloadManager implements DownloadTask.OnResetListener {
                             e.printStackTrace();
                         }
                         if(initTask(downloadInfo, downloadTask)) {
-                            downloadInfo.setState(state = Status.STATE_DOWNLOAD);
+                            if(downloadInfo.getState() == Status.STATE_START) {
+                                downloadInfo.setState(state = Status.STATE_DOWNLOAD);
+                            }
                             downloadTask.start();
                         }
                         break;
@@ -363,7 +366,9 @@ public class DownloadManager implements DownloadTask.OnResetListener {
                     downloadInfo.setState(state = Status.STATE_RESUME);
                     cannotBeSendByWorkingTaskObservable.send(downloadInfo, DownloadManager.this);
                     if(initTask(downloadInfo, downloadTask)) {
-                        downloadInfo.setState(state = Status.STATE_DOWNLOAD);
+                        if(downloadInfo.getState() == Status.STATE_RESUME) {
+                            downloadInfo.setState(state = Status.STATE_DOWNLOAD);
+                        }
                         downloadTask.start();
                     }
                     break;
